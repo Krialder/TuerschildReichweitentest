@@ -1,0 +1,23 @@
+[project]
+name = "rangetest-complete"
+version = "1.0.0"
+description = "ESP-NOW Reichweiten-Testumgebung mit Dashboard und Analyse"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.6",
+    "pyserial>=3.5",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dashboard*"]

@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Rangetest ESP-NOW Dashboard</title>
+<link rel="stylesheet" href="/static/css/main.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<h1>Rangetest ESP-NOW Dashboard
+  <span id="liveBadge" class="badge idle">idle</span>
+  <button id="btnQuit" class="danger" type="button"
+          style="float:right; margin-top:.3rem;"
+          title="Stoppt einen laufenden Run und beendet den Dashboard-Server.">
+    ⏻ Programm beenden
+  </button>
+</h1>
+
+<div class="tabs">
+  <button data-tab="flash" class="active">⚡ Flash</button>
+  <button data-tab="setup">⚙ Run-Setup</button>
+  <button data-tab="live">📡 Live</button>
+  <button data-tab="history">📊 History</button>
+  <button data-tab="analyse">📈 Analyse</button>
+</div>
+
+<!-- ============ FLASH ============ -->
+<section id="tab-flash" class="pane active">
+
+<fieldset>
+  <legend>🧙 Topologie-Wizard</legend>
+  <p style="margin:.2rem 0 .5rem;">
+    Generiert <b>1 Sender + Y parallele Ketten zu je X Relays + 1 Empfänger</b>
+    und schreibt die Build-Envs automatisch in <code>platformio.ini</code>.
+    IDs sind durch das 32-Bit Vorgaenger-Filter auf 1..31 begrenzt
+    (<code>1 + Y*(X+1) ≤ 31</code>).
+  </p>
+  <div class="row">
+    <div>
+      <label>Relays pro Kette (X)</label>
+      <input id="wizX" type="number" value="2" min="0" max="29">
+    </div>
+    <div>
+      <label>Anzahl Ketten / Empfänger (Y)</label>
+      <input id="wizY" type="number" value="1" min="1" max="15">
+    </div>
+    <div>
+      <label>WiFi-Kanal</label>
+      <input id="wizCh" type="number" value="1" min="1" max="14">
+    </div>
+    <div>
+      <label>LR-Modus</label>
+      <select id="wizLr">
+        <option value="0" selected>aus (0)</option>
+        <option value="1">an (1)</option>
+      </select>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button id="wizPlan" class="primary" type="button">Plan generieren</button>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button id="wizClear" type="button">AUTO-Block löschen</button>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button id="wizScanPorts" type="button" title="COM-Ports neu einlesen">↻ Ports scannen</button>
+    </div>
+  </div>
+  <small id="wizStatus" class="hint"></small>
+  <div id="wizPlanBox" style="margin-top:.8rem;"></div>
+  <label style="margin-top:.75rem;">Live-Log (Flash)</label>
+  <div id="flashLog"></div>
+  <small class="hint" id="flashStatus"></small>
+</fieldset>
+
+<details style="margin-top:1rem;">
+<summary style="cursor:pointer; padding:.4rem .6rem; background:#1e1e1e;
+                 border:1px solid #333; border-radius:4px;">
+  ⚙️ Manueller Flash (Fallback / Legacy-Envs)
+  <small class="hint" style="margin-left:.5rem;">Einzelnes Board ohne Wizard-Plan flashen</small>
+</summary>
+<fieldset style="margin-top:.4rem;">
+  <legend>ESP32 flashen (manuell)</legend>
+  <div class="row">
+    <div style="flex:2; min-width:240px;">
+      <label>COM-Port</label>
+      <div style="display:flex; gap:.4rem;">
+        <select id="port" style="flex:1"></select>
+        <button id="btnReloadPorts" type="button">↻</button>
+      </div>
+      <small class="hint" id="portHint"></small>
+    </div>
+    <div style="flex:3; min-width:280px;">
+      <label>Build-Env (Rolle / NODE_ID / Channel / LR / chain)</label>
+      <div style="display:flex; gap:.4rem;">
+        <select id="env" style="flex:1"></select>
+        <button id="btnReloadEnvs" type="button">↻</button>
+      </div>
+      <small class="hint" id="envHint"></small>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button id="btnFlash" class="primary" type="button">Flashen</button>
+    </div>
+  </div>
+  <small class="hint" id="flashStatusManual"></small>
+</fieldset>
+</details>
+</section>
+
+<!-- ============ SETUP ============ -->
+<section id="tab-setup" class="pane">
+
+<!-- Schritt-Indikator -->
+<div class="setup-steps">
+  <span class="step active" data-step="1">1. Targets</span>
+  <span class="step"        data-step="2">2. Profil</span>
+  <span class="step"        data-step="3">3. Start</span>
+</div>
+
+<!-- Profil-Leiste (Save/Load/Delete via localStorage) -->
+<fieldset class="profile-bar">
+  <legend>Profile</legend>
+  <div class="row" style="align-items:center;">
+    <div style="flex:1; min-width:200px;">
+      <label>Gespeichertes Profil</label>
+      <select id="profSelect"></select>
+    </div>
+    <div>
+      <button id="btnProfLoad"   type="button">Laden</button>
+      <button id="btnProfSave"   type="button">Speichern als...</button>
+      <button id="btnProfDelete" type="button" class="danger">Loeschen</button>
+    </div>
+    <small class="hint" id="profHint" style="flex-basis:100%;"></small>
+  </div>
+</fieldset>
+
+<!-- ===== Schritt 1: Targets ===== -->
+<fieldset class="setup-pane" data-step="1">
+  <legend>Schritt 1 — Empfaenger (Targets)</legend>
+  <div class="row" style="margin-bottom:.6rem;">
+    <button id="btnTargetsFromFlash" type="button" class="primary">
+      Aus Flash uebernehmen
+    </button>
+    <button id="btnTargetsFromLastRun" type="button">
+      Letzten Run klonen
+    </button>
+    <button id="btnAddTarget" type="button">+ Manuell hinzufuegen</button>
+    <button id="btnTargetsClear" type="button" class="danger">Alle loeschen</button>
+  </div>
+  <small class="hint" id="targetsHint">
+    Tipp: "Aus Flash uebernehmen" liest die Empfaenger-IDs aus der zuletzt
+    generierten Topologie (<code>platformio.ini</code> AUTO-Block).
+    <code>distance_m</code> und <code>walls</code> sind optional.
+  </small>
+  <table class="targets-tbl" style="margin-top:.6rem;">
+    <thead><tr>
+      <th style="width:5rem;">id</th>
+      <th>label</th>
+      <th style="width:7rem;">distance_m <small class="hint">(optional)</small></th>
+      <th style="width:5rem;">walls <small class="hint">(opt.)</small></th>
+      <th>notes</th>
+      <th style="width:3rem;"></th>
+    </tr></thead>
+    <tbody id="targetsTbl"></tbody>
+  </table>
+  <div class="setup-nav">
+    <span></span>
+    <button class="primary" type="button" data-go-step="2">Weiter zu Profil</button>
+  </div>
+</fieldset>
+
+<!-- ===== Schritt 2: Profil ===== -->
+<fieldset class="setup-pane" data-step="2" style="display:none;">
+  <legend>Schritt 2 — Test-Profil</legend>
+
+  <div class="row">
+    <div style="min-width:240px;">
+      <label>Paketgroessen-Modus</label>
+      <select id="cfgSizeMode">
+        <option value="mix" selected>Standard-Mix (32, 64, 128, 192, 240)</option>
+        <option value="list">Eigene Liste (Komma-getrennt)</option>
+        <option value="range">Bereich (min..max in Schritten)</option>
+        <option value="random">Zufaellig pro Paket (min..max)</option>
+      </select>
+      <small class="hint">
+        ESP-NOW Frame-Limits: <code>15..250</code> Byte (inkl. Header + CRC).
+        Der Inhalt jeder Sendung ist immer zufaellig (Firmware fuellt mit
+        <code>esp_random</code>).
+      </small>
+    </div>
+
+    <div data-size-mode="list" style="display:none;">
+      <label>Paketgroessen (komma)</label>
+      <input id="cfgSizes" type="text" value="32,64,128,192,240" style="width:14rem;">
+    </div>
+
+    <div data-size-mode="range,random" style="display:none;">
+      <label>min</label>
+      <input id="cfgSizeMin" type="number" value="32" min="15" max="250">
+    </div>
+    <div data-size-mode="range,random" style="display:none;">
+      <label>max</label>
+      <input id="cfgSizeMax" type="number" value="240" min="15" max="250">
+    </div>
+    <div data-size-mode="range" style="display:none;">
+      <label>step</label>
+      <input id="cfgSizeStep" type="number" value="32" min="1" max="250">
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:.75rem;">
+    <div>
+      <label>Dauer</label>
+      <select id="runDuration">
+        <option value="">Endlos (bis Stop)</option>
+        <option value="60">1 Minute (Smoke)</option>
+        <option value="300">5 Minuten</option>
+        <option value="1800">30 Minuten</option>
+        <option value="3600">1 Stunde</option>
+        <option value="14400">4 Stunden</option>
+        <option value="28800">8 Stunden</option>
+        <option value="86400">24 Stunden</option>
+        <option value="-1">Custom (Sek.)</option>
+      </select>
+      <input id="runDurationCustom" type="number" min="1" placeholder="Sekunden"
+             style="display:none; margin-top:.25rem;">
+    </div>
+  </div>
+
+  <details style="margin-top:.8rem;">
+    <summary style="cursor:pointer; padding:.4rem .6rem; background:#1e1e1e22;
+                     border:1px solid var(--bd); border-radius:4px;">
+      Erweiterte Einstellungen (Defaults sind fuer normale Tests okay)
+    </summary>
+    <div class="row" style="margin-top:.6rem;">
+      <div><label>retry_limit</label>
+           <input id="cfgRetry" type="number" value="1" min="1" max="8"></div>
+      <div><label>timeout_ms</label>
+           <input id="cfgTimeout" type="number" value="200" min="20" max="2000"></div>
+      <div><label>inter_send_ms</label>
+           <input id="cfgInter" type="number" value="50" min="0" max="5000"></div>
+      <div><label>jitter_pct</label>
+           <input id="cfgJitter" type="number" value="20" min="0" max="90"></div>
+      <div><label>noisefloor_samples</label>
+           <input id="cfgNoise" type="number" value="0" min="0" max="256"></div>
+    </div>
+    <small class="hint">
+      <code>retry_limit=1</code> ergibt die saubersten Per-Hop-Statistiken,
+      weil jeder Versuch einzeln in der DB landet.
+    </small>
+  </details>
+
+  <div class="setup-nav">
+    <button type="button" data-go-step="1">Zurueck</button>
+    <button class="primary" type="button" data-go-step="3">Weiter zu Start</button>
+  </div>
+</fieldset>
+
+<!-- ===== Schritt 3: Start ===== -->
+<fieldset class="setup-pane" data-step="3" style="display:none;">
+  <legend>Schritt 3 — Hardware und Start</legend>
+  <div class="row">
+    <div>
+      <label>Sender-Port (UART)</label>
+      <select id="runPort"></select>
+      <small class="hint">Vorschlag = zuletzt im Flash-Tab fuer den Sender
+      gewaehlter Port. Bei Bedarf einfach umstellen.</small>
+    </div>
+    <div>
+      <label>Empfaenger-Ports (RX-Logger, optional)</label>
+      <select id="runRxPorts" multiple size="3" style="min-width:220px;"></select>
+      <small class="hint">Strg/Shift fuer Mehrfachauswahl. Nur noetig, wenn
+      die Empfaenger-Boards parallel via USB geloggt werden sollen.</small>
+    </div>
+  </div>
+  <label style="margin-top:.8rem;">Notizen</label>
+  <input id="cfgNotes" type="text" placeholder="z. B. 'Flur 3. OG, Tueren zu'"
+         style="width:100%;">
+
+  <div id="setupSummary" class="setup-summary"></div>
+
+  <div class="setup-nav" style="margin-top:.8rem;">
+    <button type="button" data-go-step="2">Zurueck</button>
+    <span style="display:flex; gap:.5rem; align-items:center;">
+      <button id="btnStart" class="primary" type="button">Start</button>
+      <button id="btnStop"  class="danger"  type="button" disabled>Stop</button>
+      <small id="startMsg" class="hint"></small>
+    </span>
+  </div>
+</fieldset>
+
+</section>
+
+<!-- ============ LIVE ============ -->
+<section id="tab-live" class="pane">
+<fieldset>
+  <legend>Live-Status</legend>
+  <div id="kpis">
+    <span class="stat"><span>Run</span><b id="kRun">–</b></span>
+    <span class="stat"><span>Elapsed</span><b id="kElapsed">0s</b></span>
+    <span class="stat"><span>Sent</span><b id="kSent">0</b></span>
+    <span class="stat"><span>OK</span><b id="kOk">0</b></span>
+    <span class="stat"><span>Fail</span><b id="kFail">0</b></span>
+    <span class="stat"><span>PDR</span><b id="kPdr">–</b></span>
+  </div>
+  <div style="margin-top:.6rem;">
+    <button id="btnStopLive" class="danger" type="button" disabled>Stop</button>
+    <small id="liveStopMsg" class="hint" style="margin-left:.5rem;"></small>
+  </div>
+</fieldset>
+<div class="grid2">
+  <fieldset><legend>PDR (gleitend)</legend><canvas id="chartPdr"></canvas></fieldset>
+  <fieldset><legend>RSSI / SNR</legend><canvas id="chartRssi"></canvas></fieldset>
+  <fieldset><legend>Latenz (Median ms)</legend><canvas id="chartLat"></canvas></fieldset>
+  <fieldset><legend>PDR pro Paketgröße (laufend)</legend><canvas id="chartSize"></canvas></fieldset>
+</div>
+<fieldset>
+  <legend>Konsole</legend>
+  <div id="consoleLog"></div>
+</fieldset>
+</section>
+
+<!-- ============ HISTORY ============ -->
+<section id="tab-history" class="pane">
+<fieldset>
+  <legend>Vergangene Runs</legend>
+  <button id="btnReloadRuns" type="button">↻ Aktualisieren</button>
+  <div id="runsBox" style="margin-top:.5rem;"></div>
+</fieldset>
+<fieldset>
+  <legend>Run-Detail</legend>
+  <div id="runDetail"><small class="hint">Run aus der Liste anklicken.</small></div>
+</fieldset>
+</section>
+
+<!-- ============ ANALYSE ============ -->
+<section id="tab-analyse" class="pane">
+
+<fieldset>
+  <legend>Filter</legend>
+  <div class="row" style="align-items:flex-start;">
+    <div style="flex:1.5; min-width:340px;">
+      <div style="display:flex; gap:.5rem; align-items:center;">
+        <label style="margin:0;">Runs</label>
+        <button id="anaSelAll" type="button">Alle</button>
+        <button id="anaSelNone" type="button">Keine</button>
+        <button id="anaSelLong" type="button">Nur Langzeit</button>
+        <button id="anaReloadRuns" type="button">↻</button>
+      </div>
+      <div id="anaRuns" class="runs-list"></div>
+    </div>
+    <div>
+      <label>Langzeit ab (Min.)</label>
+      <input id="anaLongMin" type="number" value="60" min="0" max="2880">
+      <small class="hint">Markiert Runs >= Schwelle.</small>
+    </div>
+    <div>
+      <label>Min. Dauer für Aggregat (Sek.)</label>
+      <input id="anaMinDur" type="number" value="0" min="0">
+      <small class="hint">0 = keine Filterung.</small>
+    </div>
+    <div>
+      <label>Hop-Filter</label>
+      <input id="anaHops" type="text" placeholder="z.B. 0,1,2 oder leer">
+    </div>
+    <div>
+      <label>Größen-Filter</label>
+      <input id="anaSizes" type="text" placeholder="z.B. 32,64 oder leer">
+    </div>
+    <div>
+      <label>dst-Filter</label>
+      <input id="anaDsts" type="text" placeholder="z.B. 7 oder leer">
+    </div>
+  </div>
+  <div style="margin-top:.6rem; display:flex; gap:.5rem; align-items:center;">
+    <button id="anaApply" class="primary" type="button">Auswertung aktualisieren</button>
+    <small id="anaStatus" class="hint"></small>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>Aggregat: Vergleich nach Achse</legend>
+  <div class="row">
+    <div>
+      <label>Gruppieren nach</label>
+      <select id="anaGroup">
+        <option value="hops">Hops</option>
+        <option value="size" selected>Paketgröße</option>
+        <option value="dst">Empfänger</option>
+        <option value="channel">Channel</option>
+        <option value="lr">LR-Mode</option>
+        <option value="hour">Stunde (0-23)</option>
+        <option value="weekday">Wochentag (0=So)</option>
+        <option value="date">Datum</option>
+        <option value="fw">FW-Version</option>
+        <option value="notes">Run-Notes</option>
+        <option value="run">Run-ID</option>
+        <option value="fail_reason">Fail-Reason</option>
+        <option value="last_hop_ok">Letzter erreichter Hop</option>
+      </select>
+    </div>
+    <div>
+      <label>Metrik</label>
+      <select id="anaMetric">
+        <option value="pdr_pct" selected>PDR % (mit Wilson-CI)</option>
+        <option value="rssi_med">RSSI median (p10/p90)</option>
+        <option value="snr_med">SNR median (p10/p90)</option>
+        <option value="lat_med">Latenz median + p95</option>
+        <option value="lat_max">Latenz max</option>
+        <option value="avg_attempts">Avg. attempts</option>
+        <option value="retry_rate_pct">Retry-Rate %</option>
+        <option value="throughput_bps">Throughput Bit/s</option>
+        <option value="longest_fail_streak">Längste Fail-Strecke</option>
+      </select>
+    </div>
+    <div>
+      <label>&nbsp;</label>
+      <button id="anaExportCsv" type="button">CSV-Export</button>
+    </div>
+  </div>
+  <canvas id="chartAgg" style="max-height:380px;"></canvas>
+  <div id="anaTable" style="margin-top:.5rem; overflow-x:auto;"></div>
+</fieldset>
+
+<fieldset>
+  <legend>Tageszeit-Heatmap (nur Langzeit-Runs sinnvoll)</legend>
+  <div class="row">
+    <div><label>X-Achse</label><select id="anaHmX">
+      <option value="hour" selected>Stunde 0-23</option>
+      <option value="weekday">Wochentag</option>
+      <option value="date">Datum</option>
+      <option value="size">Paketgröße</option>
+      <option value="dst">Empfänger</option>
+      <option value="hops">Hops</option>
+    </select></div>
+    <div><label>Y-Achse</label><select id="anaHmY">
+      <option value="weekday" selected>Wochentag</option>
+      <option value="date">Datum</option>
+      <option value="size">Paketgröße</option>
+      <option value="dst">Empfänger</option>
+      <option value="hops">Hops</option>
+      <option value="hour">Stunde</option>
+      <option value="run">Run-ID</option>
+    </select></div>
+    <div><label>Metrik</label><select id="anaHmMetric">
+      <option value="pdr">PDR %</option>
+      <option value="rssi">RSSI median</option>
+      <option value="snr">SNR median</option>
+      <option value="lat">Latenz median</option>
+    </select></div>
+    <div><label>&nbsp;</label><button id="anaHmGo" type="button">Heatmap</button></div>
+  </div>
+  <div id="hmLegend" style="margin-top:.4rem; font-size:.85rem;"></div>
+  <div id="hmGrid" style="margin-top:.4rem;"></div>
+</fieldset>
+
+<fieldset>
+  <legend>Verlauf / Drift (Buckets pro Run)</legend>
+  <div class="row">
+    <div><label>Bucket</label><select id="anaTlBucket">
+      <option value="60">60 s</option>
+      <option value="300" selected>5 min</option>
+      <option value="900">15 min</option>
+      <option value="1800">30 min</option>
+      <option value="3600">1 h</option>
+    </select></div>
+    <div><label>Metrik</label><select id="anaTlMetric">
+      <option value="pdr" selected>PDR %</option>
+      <option value="rssi">RSSI median</option>
+      <option value="snr">SNR median</option>
+      <option value="lat">Latenz median</option>
+    </select></div>
+    <div><label>&nbsp;</label><button id="anaTlGo" type="button">Zeichnen</button></div>
+  </div>
+  <canvas id="chartTimeline" style="max-height:340px;"></canvas>
+</fieldset>
+
+<fieldset>
+  <legend>Verteilung (Boxplot p10/p25/p50/p75/p90 + CDF)</legend>
+  <div class="row">
+    <div><label>Gruppieren nach</label><select id="anaDistGroup">
+      <option value="size" selected>Paketgröße</option>
+      <option value="hops">Hops</option>
+      <option value="dst">Empfänger</option>
+      <option value="run">Run-ID</option>
+      <option value="hour">Stunde</option>
+    </select></div>
+    <div><label>Metrik</label><select id="anaDistMetric">
+      <option value="rssi">RSSI</option>
+      <option value="snr">SNR</option>
+      <option value="lat" selected>Latenz</option>
+    </select></div>
+    <div><label>&nbsp;</label><button id="anaDistGo" type="button">Zeichnen</button></div>
+  </div>
+  <div class="grid2">
+    <fieldset><legend>Boxplot</legend><canvas id="chartBox" style="max-height:300px;"></canvas></fieldset>
+    <fieldset><legend>CDF</legend><canvas id="chartCdf" style="max-height:300px;"></canvas></fieldset>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>Distanz vs. RSSI (aus target_meta)</legend>
+  <div class="row">
+    <div><label>&nbsp;</label><button id="anaScatGo" type="button">Zeichnen</button></div>
+  </div>
+  <canvas id="chartScatter" style="max-height:340px;"></canvas>
+</fieldset>
+
+</section>
+
+<!--
+  JS-Ladereihenfolge (bewusst klassische Skript-Tags, kein type=module):
+  1) app.js definiert global $() und die Tabs.
+  2) Die thematischen Module greifen darauf zu und registrieren ihre
+     onclick-Handler nach dem Parsen der Buttons.
+  3) Die eigentliche Init laeuft am DOMContentLoaded-Event in app.js.
+-->
+<script src="/static/js/app.js"></script>
+<script src="/static/js/flash.js"></script>
+<script src="/static/js/runsetup.js"></script>
+<script src="/static/js/live.js"></script>
+<script src="/static/js/history.js"></script>
+<script src="/static/js/analyse.js"></script>
+</body>
+</html>

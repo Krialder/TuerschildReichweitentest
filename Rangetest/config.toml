@@ -1,0 +1,20 @@
+# Storage-Optionen.
+#
+# db_path: Pfad zur SQLite-Datenbank. Relativ zum Projektroot. Wird vom Setup
+#   automatisch unter data/ angelegt, falls noch nicht vorhanden. Wer alte
+#   Runs aus dem vorherigen rangetest_espnow-Ordner mitnehmen will, kann hier
+#   auf "../rangetest_espnow/espnow.sqlite" oder einen kopierten Pfad zeigen.
+[storage]
+db_path = "data/espnow.sqlite"
+
+# Server-Optionen fuer das Dashboard.
+[server]
+host = "127.0.0.1"
+port = 8000
+
+# Pfad zum PlatformIO-CLI. Leer = Standard-Suche
+#   1) ~/.platformio/penv/Scripts/pio.exe (Windows)
+#   2) ~/.platformio/penv/bin/pio (Linux/macOS)
+#   3) "pio" aus PATH
+[platformio]
+pio_exe = ""
