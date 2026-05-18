@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zahlensystem-Konverter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 500px;
+            margin: 60px auto;
+            padding: 0 20px;
+            background: #f4f4f4;
+        }
+        h1 { text-align: center; color: #333; }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        label { display: block; margin-top: 15px; font-weight: bold; color: #555; }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            margin-top: 20px;
+            padding: 12px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover { background: #45a049; }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+            border-radius: 4px;
+            font-size: 20px;
+            text-align: center;
+            word-break: break-all;
+        }
+        .error {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fdecea;
+            border-left: 4px solid #e53935;
+            border-radius: 4px;
+            color: #c62828;
+        }
+    </style>
+</head>
+<body>
+    <h1>Zahlensystem-Konverter</h1>
+    <div class="card">
+        <form method="POST">
+            <label>Zahl eingeben</label>
+            <input type="text" name="value" value="{{ value }}" placeholder="z.B. 255 oder FF oder 11111111" required>
+
+            <label>Von</label>
+            <select name="from_base">
+                <option value="decimal" {% if from_base == 'decimal' %}selected{% endif %}>Dezimal</option>
+                <option value="binary"  {% if from_base == 'binary'  %}selected{% endif %}>Binär</option>
+                <option value="hex"     {% if from_base == 'hex'     %}selected{% endif %}>Hexadezimal</option>
+            </select>
+
+            <label>Nach</label>
+            <select name="to_base">
+                <option value="binary"  {% if to_base == 'binary'  %}selected{% endif %}>Binär</option>
+                <option value="decimal" {% if to_base == 'decimal' %}selected{% endif %}>Dezimal</option>
+                <option value="hex"     {% if to_base == 'hex'     %}selected{% endif %}>Hexadezimal</option>
+            </select>
+
+            <button type="submit">Umwandeln</button>
+        </form>
+
+        {% if result is not none %}
+        <div class="result">{{ value }} = <strong>{{ result }}</strong></div>
+        {% endif %}
+
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+    </div>
+</body>
+</html>
